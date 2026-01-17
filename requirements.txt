@@ -19,3 +19,8 @@ google-api-python-client
 requests
 gdown
 ffprobe
+torch
+diffusers
+transformers
+accelerate
+
