@@ -159,12 +159,12 @@ with tab2:
             st.error("❌ Gambar tidak dihasilkan")
 
 # =========================
-# TAB CODING AGENT
+# TAB CODING CHAT AGENT (WITH MEMORY)
 # =========================
 
 with tab3:
 
-    st.subheader("💻 Coding Agent")
+    st.subheader("💻 Coding Chat Agent (Revisi Mode)")
 
     coding_model = st.selectbox(
         "Model Coding",
@@ -175,57 +175,91 @@ with tab3:
             "deepseek-v3.1",
             "glm-5:cloud",
             "gpt-oss"
-        ]
+        ],
+        key="coding_model"
     )
 
-    mode = st.selectbox(
-        "Mode",
-        ["Tulis Code", "Debug", "Refactor", "Tambah Fitur"]
-    )
+    # =========================
+    # SESSION MEMORY
+    # =========================
 
-    instruction = st.text_area("Instruksi")
-    existing_code = st.text_area("Code Saat Ini (opsional)", height=200)
-
-    if st.button("🚀 Jalankan Agent") and instruction:
-
-        system_prompt = """
-        Kamu adalah Senior Software Engineer.
-        Berikan solusi profesional.
-        Jika menulis code:
-        - Lengkap
-        - Best practice
-        - Ada komentar
-        """
-
-        final_prompt = f"""
-        MODE: {mode}
-
-        INSTRUKSI:
-        {instruction}
-
-        CODE SAAT INI:
-        {existing_code}
-        """
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": final_prompt}
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [
+            {
+                "role": "system",
+                "content": """
+                Kamu adalah Senior Software Engineer dan AI Coding Assistant.
+                Jawab profesional.
+                Jika membuat code:
+                - Berikan code lengkap
+                - Gunakan best practice
+                - Tambahkan komentar
+                """
+            }
         ]
 
-        container = st.empty()
+    # =========================
+    # TAMPILKAN CHAT HISTORY
+    # =========================
+
+    for msg in st.session_state.chat_history[1:]:
+        if msg["role"] == "user":
+            st.chat_message("user").markdown(msg["content"])
+        else:
+            st.chat_message("assistant").markdown(msg["content"])
+
+    # =========================
+    # INPUT CHAT
+    # =========================
+
+    user_input = st.chat_input("Tulis instruksi / revisi code...")
+
+    if user_input:
+
+        # Tambahkan pesan user ke memory
+        st.session_state.chat_history.append(
+            {"role": "user", "content": user_input}
+        )
+
+        st.chat_message("user").markdown(user_input)
+
+        # Streaming response
+        response_container = st.chat_message("assistant")
         full_response = ""
 
-        for part in client.chat(
-            model=coding_model,
-            messages=messages,
-            stream=True
-        ):
-            if part.message.content:
-                full_response += part.message.content
-                container.markdown(full_response)
+        with response_container:
+            placeholder = st.empty()
 
-        st.download_button(
-            "📥 Download Code",
-            full_response,
-            file_name="generated_code.txt"
+            for part in client.chat(
+                model=coding_model,
+                messages=st.session_state.chat_history,
+                stream=True
+            ):
+                if part.message.content:
+                    full_response += part.message.content
+                    placeholder.markdown(full_response)
+
+        # Simpan jawaban ke memory
+        st.session_state.chat_history.append(
+            {"role": "assistant", "content": full_response}
         )
+
+    # =========================
+    # RESET BUTTON
+    # =========================
+
+    if st.button("🔄 Reset Chat"):
+        st.session_state.chat_history = [
+            {
+                "role": "system",
+                "content": """
+                Kamu adalah Senior Software Engineer dan AI Coding Assistant.
+                Jawab profesional.
+                Jika membuat code:
+                - Berikan code lengkap
+                - Gunakan best practice
+                - Tambahkan komentar
+                """
+            }
+        ]
+        st.success("Chat berhasil direset")
