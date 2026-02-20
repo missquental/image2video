@@ -44,8 +44,31 @@ st.sidebar.header("⚙️ Pengaturan")
 model_name = st.sidebar.selectbox(
     "Pilih Model",
     [
-        "gpt-oss:120b",
-        "gpt-oss:20b"
+        "qwen3.5:cloud",
+        "qwen3-coder-next",
+        "glm-5:cloud",
+        "minimax-m2.5:cloud",
+        "kimi-k2.5:cloud",
+        "qwen3-vl",
+        "rnj-1",
+        "qwen3-next",
+        "nemotron-3-nano",
+        "gemini-3-flash-preview",
+        "devstral-small-2",
+        "devstral-2",
+        "glm-4.7:cloud",
+        "cogito-2.1",
+        "minimax-m2:cloud",
+        "glm-4.6:cloud",
+        "deepseek-v3.2:cloud",
+        "minimax-m2.1:cloud",
+        "kimi-k2-thinking:cloud",
+        "kimi-k2:1t-cloud",
+        "mistral-large-3:675b-cloud",
+        "gemma3",
+        "gpt-oss",
+        "qwen3-coder",
+        "deepseek-v3.1"
     ]
 )
 
