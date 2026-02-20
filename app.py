@@ -149,12 +149,12 @@ with tab1:
             st.error(f"Error: {e}")
 
 # =========================
-# TAB IMAGE
+# TAB IMAGE (FIX CLOUD)
 # =========================
 
 with tab2:
 
-    st.subheader("🎨 AI Image Generator")
+    st.subheader("🎨 AI Image Generator (Cloud Mode)")
 
     image_prompt = st.text_area("Prompt Gambar", "a sunset over mountains")
 
@@ -168,41 +168,56 @@ with tab2:
     if generate_image_button and image_prompt:
 
         st.info("⏳ Sedang generate gambar...")
-        progress_text = st.empty()
+
         image_placeholder = st.empty()
+        progress_text = st.empty()
 
         try:
-            for response in client.generate(
+            messages = [
+                {
+                    "role": "user",
+                    "content": image_prompt
+                }
+            ]
+
+            full_image = None
+
+            for part in client.chat(
                 model=image_model,
-                prompt=image_prompt,
+                messages=messages,
                 stream=True
             ):
 
-                # Final image
-                if response.get("image"):
-                    image_bytes = base64.b64decode(response["image"])
-                    image = Image.open(BytesIO(image_bytes))
+                # Cloud image biasanya kirim base64 di message.images
+                if part.get("message") and part["message"].get("images"):
+                    full_image = part["message"]["images"][0]
 
-                    image_placeholder.image(
-                        image,
-                        caption="Hasil Generate",
-                        use_column_width=True
-                    )
-
-                    st.download_button(
-                        label="📥 Download Image",
-                        data=image_bytes,
-                        file_name="generated_image.png",
-                        mime="image/png"
-                    )
-
-                # Progress info
-                elif response.get("total"):
+                # Progress indicator
+                if part.get("total"):
                     progress_text.text(
-                        f"Progress: {response.get('completed', 0)}/{response['total']}"
+                        f"Progress: {part.get('completed', 0)}/{part['total']}"
                     )
 
-            st.success("✅ Gambar selesai dibuat!")
+            if full_image:
+                image_bytes = base64.b64decode(full_image)
+                image = Image.open(BytesIO(image_bytes))
+
+                image_placeholder.image(
+                    image,
+                    caption="Hasil Generate",
+                    use_column_width=True
+                )
+
+                st.download_button(
+                    label="📥 Download Image",
+                    data=image_bytes,
+                    file_name="generated_image.png",
+                    mime="image/png"
+                )
+
+                st.success("✅ Gambar selesai dibuat!")
+            else:
+                st.error("❌ Model tidak mengembalikan gambar.")
 
         except Exception as e:
             st.error(f"Error: {e}")
