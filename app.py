@@ -172,19 +172,22 @@ with tab2:
         image_placeholder = st.empty()
 
         try:
-            for response in generate(
+            for response in client.generate(
                 model=image_model,
                 prompt=image_prompt,
-                stream=True,
-                host="https://ollama.com",
-                headers={"Authorization": "Bearer " + OLLAMA_API_KEY}
+                stream=True
             ):
 
-                if response.image:
-                    image_bytes = base64.b64decode(response.image)
+                # Final image
+                if response.get("image"):
+                    image_bytes = base64.b64decode(response["image"])
                     image = Image.open(BytesIO(image_bytes))
 
-                    image_placeholder.image(image, caption="Hasil Generate", use_column_width=True)
+                    image_placeholder.image(
+                        image,
+                        caption="Hasil Generate",
+                        use_column_width=True
+                    )
 
                     st.download_button(
                         label="📥 Download Image",
@@ -193,9 +196,10 @@ with tab2:
                         mime="image/png"
                     )
 
-                elif response.total:
+                # Progress info
+                elif response.get("total"):
                     progress_text.text(
-                        f"Progress: {response.completed or 0}/{response.total}"
+                        f"Progress: {response.get('completed', 0)}/{response['total']}"
                     )
 
             st.success("✅ Gambar selesai dibuat!")
