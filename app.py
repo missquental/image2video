@@ -1,20 +1,22 @@
 import os
 import streamlit as st
-from ollama import Client
+import base64
+from io import BytesIO
 from datetime import datetime
+from PIL import Image
+from ollama import Client, generate
 
 # =========================
 # CONFIG
 # =========================
 
 st.set_page_config(
-    page_title="AI Artikel Generator - Ollama Cloud",
-    page_icon="📝",
+    page_title="AI Artikel & Image Generator",
+    page_icon="🚀",
     layout="wide"
 )
 
-st.title("📝 AI Artikel Generator (Ollama Cloud API)")
-st.write("Generate artikel otomatis menggunakan Ollama Cloud (ollama.com)")
+st.title("🚀 AI Artikel & Image Generator (Ollama Cloud)")
 
 # =========================
 # API KEY
@@ -23,7 +25,7 @@ st.write("Generate artikel otomatis menggunakan Ollama Cloud (ollama.com)")
 OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY")
 
 if not OLLAMA_API_KEY:
-    st.error("⚠️ OLLAMA_API_KEY belum diset di Streamlit Cloud Secrets")
+    st.error("⚠️ OLLAMA_API_KEY belum diset di Streamlit Secrets")
     st.stop()
 
 # =========================
@@ -36,13 +38,13 @@ client = Client(
 )
 
 # =========================
-# SIDEBAR
+# SIDEBAR SETTINGS
 # =========================
 
-st.sidebar.header("⚙️ Pengaturan")
+st.sidebar.header("⚙️ Pengaturan Model")
 
 model_name = st.sidebar.selectbox(
-    "Pilih Model",
+    "Pilih Model Artikel",
     [
         "qwen3.5:cloud",
         "qwen3-coder-next",
@@ -83,67 +85,120 @@ tone = st.sidebar.selectbox(
 )
 
 # =========================
-# INPUT
+# TABS
 # =========================
 
-title = st.text_input("Judul Artikel")
-
-keywords = st.text_input("Keyword (pisahkan dengan koma)")
-
-generate_button = st.button("🚀 Generate Artikel")
+tab1, tab2 = st.tabs(["📝 Generate Artikel", "🎨 Generate Image"])
 
 # =========================
-# GENERATE
+# TAB ARTIKEL
 # =========================
 
-if generate_button and title:
+with tab1:
 
-    length_instruction = {
-        "Pendek (500 kata)": "sekitar 500 kata",
-        "Sedang (1000 kata)": "sekitar 1000 kata",
-        "Panjang (2000 kata)": "sekitar 2000 kata"
-    }
+    st.subheader("📝 Generator Artikel")
 
-    prompt = f"""
-    Buatkan artikel {length_instruction[article_length]} dengan gaya {tone}.
-    Judul: {title}
-    Keyword utama: {keywords}
+    title = st.text_input("Judul Artikel")
+    keywords = st.text_input("Keyword (pisahkan dengan koma)")
 
-    Struktur artikel:
-    - Pendahuluan
-    - Subjudul H2 & H3
-    - Paragraf informatif
-    - Kesimpulan
-    - Optimasi SEO natural
-    """
+    generate_button = st.button("🚀 Generate Artikel")
 
-    messages = [
-        {
-            "role": "user",
-            "content": prompt
+    if generate_button and title:
+
+        length_instruction = {
+            "Pendek (500 kata)": "sekitar 500 kata",
+            "Sedang (1000 kata)": "sekitar 1000 kata",
+            "Panjang (2000 kata)": "sekitar 2000 kata"
         }
-    ]
 
-    st.info("⏳ Sedang generate artikel...")
+        prompt = f"""
+        Buatkan artikel {length_instruction[article_length]} dengan gaya {tone}.
+        Judul: {title}
+        Keyword utama: {keywords}
 
-    article_container = st.empty()
-    full_response = ""
+        Struktur:
+        - Pendahuluan
+        - Subjudul H2 dan H3
+        - Paragraf informatif
+        - Kesimpulan
+        - SEO friendly natural
+        """
 
-    try:
-        for part in client.chat(model_name, messages=messages, stream=True):
-            if part.message.content:
-                full_response += part.message.content
-                article_container.markdown(full_response)
+        messages = [{"role": "user", "content": prompt}]
 
-        st.success("✅ Artikel selesai dibuat!")
+        st.info("⏳ Sedang generate artikel...")
+        article_container = st.empty()
+        full_response = ""
 
-        # Download button
-        st.download_button(
-            label="📥 Download Artikel (.txt)",
-            data=full_response,
-            file_name=f"artikel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-            mime="text/plain"
-        )
+        try:
+            for part in client.chat(model_name, messages=messages, stream=True):
+                if part.message.content:
+                    full_response += part.message.content
+                    article_container.markdown(full_response)
 
-    except Exception as e:
-        st.error(f"Terjadi error: {e}")
+            st.success("✅ Artikel selesai!")
+
+            st.download_button(
+                label="📥 Download Artikel (.txt)",
+                data=full_response,
+                file_name=f"artikel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain"
+            )
+
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+# =========================
+# TAB IMAGE
+# =========================
+
+with tab2:
+
+    st.subheader("🎨 AI Image Generator")
+
+    image_prompt = st.text_area("Prompt Gambar", "a sunset over mountains")
+
+    image_model = st.selectbox(
+        "Pilih Model Image",
+        ["x/z-image-turbo"]
+    )
+
+    generate_image_button = st.button("🖼 Generate Image")
+
+    if generate_image_button and image_prompt:
+
+        st.info("⏳ Sedang generate gambar...")
+        progress_text = st.empty()
+        image_placeholder = st.empty()
+
+        try:
+            for response in generate(
+                model=image_model,
+                prompt=image_prompt,
+                stream=True,
+                host="https://ollama.com",
+                headers={"Authorization": "Bearer " + OLLAMA_API_KEY}
+            ):
+
+                if response.image:
+                    image_bytes = base64.b64decode(response.image)
+                    image = Image.open(BytesIO(image_bytes))
+
+                    image_placeholder.image(image, caption="Hasil Generate", use_column_width=True)
+
+                    st.download_button(
+                        label="📥 Download Image",
+                        data=image_bytes,
+                        file_name="generated_image.png",
+                        mime="image/png"
+                    )
+
+                elif response.total:
+                    progress_text.text(
+                        f"Progress: {response.completed or 0}/{response.total}"
+                    )
+
+            st.success("✅ Gambar selesai dibuat!")
+
+        except Exception as e:
+            st.error(f"Error: {e}")
