@@ -23,4 +23,4 @@ torch
 diffusers
 transformers
 accelerate
-
+ollama
