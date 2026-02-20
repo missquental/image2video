@@ -4,19 +4,19 @@ import base64
 from io import BytesIO
 from datetime import datetime
 from PIL import Image
-from ollama import Client, generate
+from ollama import Client
 
 # =========================
 # CONFIG
 # =========================
 
 st.set_page_config(
-    page_title="AI Artikel & Image Generator",
+    page_title="AI Content & Coding Suite",
     page_icon="🚀",
     layout="wide"
 )
 
-st.title("🚀 AI Artikel & Image Generator (Ollama Cloud)")
+st.title("🚀 AI Content & Coding Suite (Ollama Cloud)")
 
 # =========================
 # API KEY
@@ -29,7 +29,7 @@ if not OLLAMA_API_KEY:
     st.stop()
 
 # =========================
-# CLIENT
+# CLIENT CLOUD
 # =========================
 
 client = Client(
@@ -38,49 +38,30 @@ client = Client(
 )
 
 # =========================
-# SIDEBAR SETTINGS
+# SIDEBAR
 # =========================
 
-st.sidebar.header("⚙️ Pengaturan Model")
+st.sidebar.header("⚙️ Pengaturan Artikel")
 
 model_name = st.sidebar.selectbox(
-    "Pilih Model Artikel",
+    "Model Artikel",
     [
         "qwen3.5:cloud",
-        "qwen3-coder-next",
         "glm-5:cloud",
-        "minimax-m2.5:cloud",
-        "kimi-k2.5:cloud",
-        "qwen3-vl",
-        "rnj-1",
-        "qwen3-next",
-        "nemotron-3-nano",
-        "gemini-3-flash-preview",
-        "devstral-small-2",
-        "devstral-2",
-        "glm-4.7:cloud",
-        "cogito-2.1",
-        "minimax-m2:cloud",
-        "glm-4.6:cloud",
         "deepseek-v3.2:cloud",
-        "minimax-m2.1:cloud",
-        "kimi-k2-thinking:cloud",
-        "kimi-k2:1t-cloud",
         "mistral-large-3:675b-cloud",
-        "gemma3",
         "gpt-oss",
-        "qwen3-coder",
-        "deepseek-v3.1"
+        "gemma3"
     ]
 )
 
 article_length = st.sidebar.selectbox(
     "Panjang Artikel",
-    ["Pendek (500 kata)", "Sedang (1000 kata)", "Panjang (2000 kata)"]
+    ["500 kata", "1000 kata", "2000 kata"]
 )
 
 tone = st.sidebar.selectbox(
-    "Gaya Penulisan",
+    "Gaya",
     ["Formal", "Santai", "SEO Friendly", "Storytelling"]
 )
 
@@ -88,7 +69,11 @@ tone = st.sidebar.selectbox(
 # TABS
 # =========================
 
-tab1, tab2 = st.tabs(["📝 Generate Artikel", "🎨 Generate Image"])
+tab1, tab2, tab3 = st.tabs([
+    "📝 Artikel",
+    "🎨 Image",
+    "💻 Coding Agent"
+])
 
 # =========================
 # TAB ARTIKEL
@@ -99,125 +84,148 @@ with tab1:
     st.subheader("📝 Generator Artikel")
 
     title = st.text_input("Judul Artikel")
-    keywords = st.text_input("Keyword (pisahkan dengan koma)")
+    keywords = st.text_input("Keyword")
 
-    generate_button = st.button("🚀 Generate Artikel")
-
-    if generate_button and title:
-
-        length_instruction = {
-            "Pendek (500 kata)": "sekitar 500 kata",
-            "Sedang (1000 kata)": "sekitar 1000 kata",
-            "Panjang (2000 kata)": "sekitar 2000 kata"
-        }
+    if st.button("🚀 Generate Artikel") and title:
 
         prompt = f"""
-        Buatkan artikel {length_instruction[article_length]} dengan gaya {tone}.
+        Buat artikel {article_length}, gaya {tone}.
         Judul: {title}
-        Keyword utama: {keywords}
+        Keyword: {keywords}
 
         Struktur:
         - Pendahuluan
-        - Subjudul H2 dan H3
-        - Paragraf informatif
+        - Subjudul H2 & H3
+        - Isi informatif
         - Kesimpulan
-        - SEO friendly natural
         """
 
         messages = [{"role": "user", "content": prompt}]
 
-        st.info("⏳ Sedang generate artikel...")
-        article_container = st.empty()
-        full_response = ""
+        container = st.empty()
+        full_text = ""
 
-        try:
-            for part in client.chat(model_name, messages=messages, stream=True):
-                if part.message.content:
-                    full_response += part.message.content
-                    article_container.markdown(full_response)
+        for part in client.chat(model=model_name, messages=messages, stream=True):
+            if part.message.content:
+                full_text += part.message.content
+                container.markdown(full_text)
 
-            st.success("✅ Artikel selesai!")
-
-            st.download_button(
-                label="📥 Download Artikel (.txt)",
-                data=full_response,
-                file_name=f"artikel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain"
-            )
-
-        except Exception as e:
-            st.error(f"Error: {e}")
+        st.download_button(
+            "📥 Download Artikel",
+            full_text,
+            file_name=f"artikel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        )
 
 # =========================
-# TAB IMAGE (FIX CLOUD)
+# TAB IMAGE
 # =========================
 
 with tab2:
 
-    st.subheader("🎨 AI Image Generator (Cloud Mode)")
+    st.subheader("🎨 AI Image Generator")
 
     image_prompt = st.text_area("Prompt Gambar", "a sunset over mountains")
 
     image_model = st.selectbox(
-        "Pilih Model Image",
+        "Model Image",
         ["x/z-image-turbo"]
     )
 
-    generate_image_button = st.button("🖼 Generate Image")
+    if st.button("🖼 Generate Image"):
 
-    if generate_image_button and image_prompt:
+        messages = [{"role": "user", "content": image_prompt}]
+        final_image = None
 
-        st.info("⏳ Sedang generate gambar...")
+        for part in client.chat(
+            model=image_model,
+            messages=messages,
+            stream=True
+        ):
+            if part.get("message") and part["message"].get("images"):
+                final_image = part["message"]["images"][0]
 
-        image_placeholder = st.empty()
-        progress_text = st.empty()
+        if final_image:
+            image_bytes = base64.b64decode(final_image)
+            image = Image.open(BytesIO(image_bytes))
+            st.image(image, use_column_width=True)
 
-        try:
-            messages = [
-                {
-                    "role": "user",
-                    "content": image_prompt
-                }
-            ]
+            st.download_button(
+                "📥 Download Image",
+                image_bytes,
+                file_name="generated.png",
+                mime="image/png"
+            )
+        else:
+            st.error("❌ Gambar tidak dihasilkan")
 
-            full_image = None
+# =========================
+# TAB CODING AGENT
+# =========================
 
-            for part in client.chat(
-                model=image_model,
-                messages=messages,
-                stream=True
-            ):
+with tab3:
 
-                # Cloud image biasanya kirim base64 di message.images
-                if part.get("message") and part["message"].get("images"):
-                    full_image = part["message"]["images"][0]
+    st.subheader("💻 Coding Agent")
 
-                # Progress indicator
-                if part.get("total"):
-                    progress_text.text(
-                        f"Progress: {part.get('completed', 0)}/{part['total']}"
-                    )
+    coding_model = st.selectbox(
+        "Model Coding",
+        [
+            "qwen3-coder-next",
+            "qwen3-coder",
+            "devstral-2",
+            "deepseek-v3.1",
+            "glm-5:cloud",
+            "gpt-oss"
+        ]
+    )
 
-            if full_image:
-                image_bytes = base64.b64decode(full_image)
-                image = Image.open(BytesIO(image_bytes))
+    mode = st.selectbox(
+        "Mode",
+        ["Tulis Code", "Debug", "Refactor", "Tambah Fitur"]
+    )
 
-                image_placeholder.image(
-                    image,
-                    caption="Hasil Generate",
-                    use_column_width=True
-                )
+    instruction = st.text_area("Instruksi")
+    existing_code = st.text_area("Code Saat Ini (opsional)", height=200)
 
-                st.download_button(
-                    label="📥 Download Image",
-                    data=image_bytes,
-                    file_name="generated_image.png",
-                    mime="image/png"
-                )
+    if st.button("🚀 Jalankan Agent") and instruction:
 
-                st.success("✅ Gambar selesai dibuat!")
-            else:
-                st.error("❌ Model tidak mengembalikan gambar.")
+        system_prompt = """
+        Kamu adalah Senior Software Engineer.
+        Berikan solusi profesional.
+        Jika menulis code:
+        - Lengkap
+        - Best practice
+        - Ada komentar
+        """
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+        final_prompt = f"""
+        MODE: {mode}
+
+        INSTRUKSI:
+        {instruction}
+
+        CODE SAAT INI:
+        {existing_code}
+        """
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": final_prompt}
+        ]
+
+        container = st.empty()
+        full_response = ""
+
+        for part in client.chat(
+            model=coding_model,
+            messages=messages,
+            stream=True
+        ):
+            if part.message.content:
+                full_response += part.message.content
+                container.markdown(full_response)
+
+        st.download_button(
+            "📥 Download Code",
+            full_response,
+            file_name="generated_code.txt"
+        )
