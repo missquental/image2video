@@ -6,7 +6,6 @@ from ollama import Client
 # =========================
 # CONFIG
 # =========================
-
 st.set_page_config(
     page_title="AI Content & Coding Suite",
     page_icon="🚀",
@@ -18,38 +17,34 @@ st.title("🚀 AI Content & Coding Suite (Ollama Cloud)")
 # =========================
 # API KEY
 # =========================
-
 OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY")
 
 if not OLLAMA_API_KEY:
-    st.error("⚠️ OLLAMA_API_KEY belum diset di Streamlit Secrets")
+    st.error("⚠️ `OLLAMA_API_KEY` belum diset di Streamlit Secrets")
     st.stop()
 
 # =========================
 # CLIENT CLOUD
 # =========================
-
 client = Client(
     host="https://ollama.com",
-    headers={"Authorization": "Bearer " + OLLAMA_API_KEY}
+    headers={"Authorization": f"Bearer {OLLAMA_API_KEY}"}
 )
 
 # =========================
 # SIDEBAR
 # =========================
-
 st.sidebar.header("⚙️ Pengaturan")
 
-# Model untuk Artikel
+# ——— Model untuk Artikel ———
 article_model = st.sidebar.selectbox(
     "Model Artikel",
     [
         "qwen3.5:cloud",
-        "glm-5:cloud",
+        "glm-4:cloud",
         "deepseek-v3.2:cloud",
-        "mistral-large-3:675b-cloud",
-        "gpt-oss",
-        "gemma3"
+        "mistral-large-24.11:cloud",  # updated version
+        "gpt-oss"
     ],
     key="article_model"
 )
@@ -66,30 +61,25 @@ tone = st.sidebar.selectbox(
     key="tone"
 )
 
-# Model untuk Coding
+# ——— Model untuk Coding ———
 coding_model = st.sidebar.selectbox(
     "Model Coding",
     [
-        "qwen3-coder-next",
-        "qwen3-coder",
-        "devstral-2",
-        "deepseek-v3.1",
-        "glm-5:cloud",
+        "qwen3-coder-next:cloud",   # ✅ Cloud-ready & terbaru
+        "deepseek-v3.1:cloud",
         "gpt-oss"
     ],
     key="coding_model"
 )
 
 # =========================
-# TABS (Hanya 2: Artikel & Coding)
+# TABS
 # =========================
-
 tab1, tab2 = st.tabs(["📝 Artikel", "💻 Coding Agent"])
 
 # =========================
 # TAB ARTIKEL
 # =========================
-
 with tab1:
     st.subheader("📝 Generator Artikel")
 
@@ -115,10 +105,14 @@ with tab1:
         full_text = ""
 
         with st.spinner("⏳ Memproses..."):
-            for part in client.chat(model=article_model, messages=messages, stream=True):
-                if part.message.content:
-                    full_text += part.message.content
-                    container.markdown(full_text)
+            try:
+                for part in client.chat(model=article_model, messages=messages, stream=True):
+                    if part and part.message and part.message.content:
+                        full_text += part.message.content
+                        container.markdown(full_text)
+            except Exception as e:
+                st.error(f"❌ Error saat generate artikel: `{str(e)}`")
+                st.stop()
 
         if full_text.strip():
             st.download_button(
@@ -128,19 +122,15 @@ with tab1:
                 mime="text/plain"
             )
         else:
-            st.error("❌ Gagal menghasilkan artikel. Pastikan model tersedia dan API key valid.")
+            st.error("❌ Tidak ada output dari model. Pastikan model tersedia dan API key valid.")
 
 # =========================
 # TAB CODING AGENT (Dengan Memory)
 # =========================
-
 with tab2:
     st.subheader("💻 Coding Chat Agent (Revisi Mode)")
 
-    # =========================
-    # SESSION MEMORY
-    # =========================
-
+    # ——— SESSION MEMORY ———
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = [
             {
@@ -149,36 +139,29 @@ with tab2:
                 Kamu adalah Senior Software Engineer dan AI Coding Assistant.
                 Jawab profesional.
                 Jika membuat code:
-                - Berikan code lengkap
-                - Gunakan best practice
-                - Tambahkan komentar
+                - Berikan code lengkap (file-file terpisah bila perlu)
+                - Gunakan best practice (PEP8/ESLint/etc.)
+                - Tambahkan komentar *just-in-time* untuk penjelasan arsitektur/kritikal
+                - Utamakan keamanan (misal: input validation, XSS/SQLi prevention)
                 """
             }
         ]
 
-    # =========================
-    # TAMPILKAN CHAT HISTORY
-    # =========================
-
+    # ——— TAMPILKAN CHAT ———
     for msg in st.session_state.chat_history[1:]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # =========================
-    # INPUT CHAT
-    # =========================
-
+    # ——— INPUT USER ———
     user_input = st.chat_input("Tulis instruksi / revisi code...")
 
     if user_input:
-        # Tampilkan input user terlebih dahulu
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # Tambahkan ke history
         st.session_state.chat_history.append({"role": "user", "content": user_input})
 
-        # Generate respons streaming
+        # Streaming respons
         with st.chat_message("assistant"):
             placeholder = st.empty()
             full_response = ""
@@ -190,21 +173,18 @@ with tab2:
                         messages=st.session_state.chat_history,
                         stream=True
                     ):
-                        if hasattr(part, "message") and hasattr(part.message, "content") and part.message.content:
+                        if part and part.message and part.message.content:
                             full_response += part.message.content
                             placeholder.markdown(full_response)
                 except Exception as e:
-                    st.error(f"⚠️ Error saat memanggil API: {str(e)}")
-                    full_response = "❌ Terjadi kesalahan saat memproses permintaan."
+                    error_msg = f"⚠️ Error: `{str(e)}`. Pastikan model `{coding_model}` tersedia di akun Anda."
+                    placeholder.markdown(error_msg)
+                    full_response = error_msg
 
-        # Simpan jawaban ke history
         if full_response.strip():
             st.session_state.chat_history.append({"role": "assistant", "content": full_response})
 
-    # =========================
-    # RESET BUTTON
-    # =========================
-
+    # ——— RESET CHAT ———
     if st.button("🔄 Reset Chat"):
         st.session_state.chat_history = [
             {
@@ -213,9 +193,10 @@ with tab2:
                 Kamu adalah Senior Software Engineer dan AI Coding Assistant.
                 Jawab profesional.
                 Jika membuat code:
-                - Berikan code lengkap
-                - Gunakan best practice
-                - Tambahkan komentar
+                - Berikan code lengkap (file-file terpisah bila perlu)
+                - Gunakan best practice (PEP8/ESLint/etc.)
+                - Tambahkan komentar *just-in-time* untuk penjelasan arsitektur/kritikal
+                - Utamakan keamanan (misal: input validation, XSS/SQLi prevention)
                 """
             }
         ]
