@@ -1,11 +1,15 @@
 import os
 import streamlit as st
+import base64
+from io import BytesIO
 from datetime import datetime
+from PIL import Image
 from ollama import Client
 
 # =========================
 # CONFIG
 # =========================
+
 st.set_page_config(
     page_title="AI Content & Coding Suite",
     page_icon="🚀",
@@ -17,85 +21,82 @@ st.title("🚀 AI Content & Coding Suite (Ollama Cloud)")
 # =========================
 # API KEY
 # =========================
+
 OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY")
 
 if not OLLAMA_API_KEY:
-    st.error("⚠️ `OLLAMA_API_KEY` belum diset di Streamlit Secrets")
+    st.error("⚠️ OLLAMA_API_KEY belum diset di Streamlit Secrets")
     st.stop()
 
 # =========================
 # CLIENT CLOUD
 # =========================
+
 client = Client(
     host="https://ollama.com",
-    headers={"Authorization": f"Bearer {OLLAMA_API_KEY}"}
+    headers={"Authorization": "Bearer " + OLLAMA_API_KEY}
 )
 
 # =========================
 # SIDEBAR
 # =========================
-st.sidebar.header("⚙️ Pengaturan")
 
-# ——— Model untuk Artikel ———
-article_model = st.sidebar.selectbox(
+st.sidebar.header("⚙️ Pengaturan Artikel")
+
+model_name = st.sidebar.selectbox(
     "Model Artikel",
     [
         "qwen3.5:cloud",
-        "glm-4:cloud",
+        "glm-5:cloud",
         "deepseek-v3.2:cloud",
-        "mistral-large-24.11:cloud",  # updated version
-        "gpt-oss"
-    ],
-    key="article_model"
+        "mistral-large-3:675b-cloud",
+        "gpt-oss",
+        "gemma3"
+    ]
 )
 
 article_length = st.sidebar.selectbox(
     "Panjang Artikel",
-    ["500 kata", "1000 kata", "2000 kata"],
-    key="article_length"
+    ["500 kata", "1000 kata", "2000 kata"]
 )
 
 tone = st.sidebar.selectbox(
     "Gaya",
-    ["Formal", "Santai", "SEO Friendly", "Storytelling"],
-    key="tone"
-)
-
-# ——— Model untuk Coding ———
-coding_model = st.sidebar.selectbox(
-    "Model Coding",
-    [
-        "qwen3-coder-next:cloud",   # ✅ Cloud-ready & terbaru
-        "deepseek-v3.1:cloud",
-        "gpt-oss"
-    ],
-    key="coding_model"
+    ["Formal", "Santai", "SEO Friendly", "Storytelling"]
 )
 
 # =========================
 # TABS
 # =========================
-tab1, tab2 = st.tabs(["📝 Artikel", "💻 Coding Agent"])
+
+tab1, tab2, tab3 = st.tabs([
+    "📝 Artikel",
+    "🎨 Image",
+    "💻 Coding Agent"
+])
 
 # =========================
 # TAB ARTIKEL
 # =========================
+
 with tab1:
+
     st.subheader("📝 Generator Artikel")
 
     title = st.text_input("Judul Artikel")
-    keywords = st.text_input("Keyword (opsional)")
+    keywords = st.text_input("Keyword")
 
     if st.button("🚀 Generate Artikel") and title:
+
         prompt = f"""
         Buat artikel {article_length}, gaya {tone}.
         Judul: {title}
-        Keyword: {keywords or "-"}
+        Keyword: {keywords}
 
         Struktur:
         - Pendahuluan
-        - Subjudul dengan heading H2 & H3
-        - Isi informatif dan mendalam
+        - Subjudul H2 & H3
+        - Isi informatif
         - Kesimpulan
         """
 
@@ -104,30 +105,65 @@ with tab1:
         container = st.empty()
         full_text = ""
 
-        with st.spinner("⏳ Memproses..."):
-            try:
-                for part in client.chat(model=article_model, messages=messages, stream=True):
-                    if part and part.message and part.message.content:
-                        full_text += part.message.content
-                        container.markdown(full_text)
-            except Exception as e:
-                st.error(f"❌ Error saat generate artikel: `{str(e)}`")
-                st.stop()
+        for part in client.chat(model=model_name, messages=messages, stream=True):
+            if part.message.content:
+                full_text += part.message.content
+                container.markdown(full_text)
 
-        if full_text.strip():
+        st.download_button(
+            "📥 Download Artikel",
+            full_text,
+            file_name=f"artikel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        )
+
+# =========================
+# TAB IMAGE
+# =========================
+
+with tab2:
+
+    st.subheader("🎨 AI Image Generator")
+
+    image_prompt = st.text_area("Prompt Gambar", "a sunset over mountains")
+
+    image_model = st.selectbox(
+        "Model Image",
+        ["x/z-image-turbo"]
+    )
+
+    if st.button("🖼 Generate Image"):
+
+        messages = [{"role": "user", "content": image_prompt}]
+        final_image = None
+
+        for part in client.chat(
+            model=image_model,
+            messages=messages,
+            stream=True
+        ):
+            if part.get("message") and part["message"].get("images"):
+                final_image = part["message"]["images"][0]
+
+        if final_image:
+            image_bytes = base64.b64decode(final_image)
+            image = Image.open(BytesIO(image_bytes))
+            st.image(image, use_column_width=True)
+
             st.download_button(
-                "📥 Download Artikel",
-                full_text,
-                file_name=f"artikel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain"
+                "📥 Download Image",
+                image_bytes,
+                file_name="generated.png",
+                mime="image/png"
             )
         else:
-            st.error("❌ Tidak ada output dari model. Pastikan model tersedia dan API key valid.")
+            st.error("❌ Gambar tidak dihasilkan")
 
 # =========================
-# TAB CODING AGENT (Dengan Memory)
+# TAB CODING CHAT AGENT (WITH MEMORY)
 # =========================
-with tab2:
+
+with tab3:
+
     st.subheader("💻 Coding Chat Agent (Revisi Mode)")
 
     coding_model = st.selectbox(
