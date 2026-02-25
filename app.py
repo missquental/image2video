@@ -130,7 +130,23 @@ with tab1:
 with tab2:
     st.subheader("💻 Coding Chat Agent (Revisi Mode)")
 
-    # ——— SESSION MEMORY ———
+    coding_model = st.selectbox(
+        "Model Coding",
+        [
+            "qwen3-coder-next",
+            "qwen3-coder",
+            "devstral-2",
+            "deepseek-v3.1",
+            "glm-5:cloud",
+            "gpt-oss"
+        ],
+        key="coding_model"
+    )
+
+    # =========================
+    # SESSION MEMORY
+    # =========================
+
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = [
             {
@@ -139,52 +155,63 @@ with tab2:
                 Kamu adalah Senior Software Engineer dan AI Coding Assistant.
                 Jawab profesional.
                 Jika membuat code:
-                - Berikan code lengkap (file-file terpisah bila perlu)
-                - Gunakan best practice (PEP8/ESLint/etc.)
-                - Tambahkan komentar *just-in-time* untuk penjelasan arsitektur/kritikal
-                - Utamakan keamanan (misal: input validation, XSS/SQLi prevention)
+                - Berikan code lengkap
+                - Gunakan best practice
+                - Tambahkan komentar
                 """
             }
         ]
 
-    # ——— TAMPILKAN CHAT ———
-    for msg in st.session_state.chat_history[1:]:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    # =========================
+    # TAMPILKAN CHAT HISTORY
+    # =========================
 
-    # ——— INPUT USER ———
+    for msg in st.session_state.chat_history[1:]:
+        if msg["role"] == "user":
+            st.chat_message("user").markdown(msg["content"])
+        else:
+            st.chat_message("assistant").markdown(msg["content"])
+
+    # =========================
+    # INPUT CHAT
+    # =========================
+
     user_input = st.chat_input("Tulis instruksi / revisi code...")
 
     if user_input:
-        with st.chat_message("user"):
-            st.markdown(user_input)
 
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        # Tambahkan pesan user ke memory
+        st.session_state.chat_history.append(
+            {"role": "user", "content": user_input}
+        )
 
-        # Streaming respons
-        with st.chat_message("assistant"):
+        st.chat_message("user").markdown(user_input)
+
+        # Streaming response
+        response_container = st.chat_message("assistant")
+        full_response = ""
+
+        with response_container:
             placeholder = st.empty()
-            full_response = ""
 
-            with st.spinner("⏳ Membuat kode..."):
-                try:
-                    for part in client.chat(
-                        model=coding_model,
-                        messages=st.session_state.chat_history,
-                        stream=True
-                    ):
-                        if part and part.message and part.message.content:
-                            full_response += part.message.content
-                            placeholder.markdown(full_response)
-                except Exception as e:
-                    error_msg = f"⚠️ Error: `{str(e)}`. Pastikan model `{coding_model}` tersedia di akun Anda."
-                    placeholder.markdown(error_msg)
-                    full_response = error_msg
+            for part in client.chat(
+                model=coding_model,
+                messages=st.session_state.chat_history,
+                stream=True
+            ):
+                if part.message.content:
+                    full_response += part.message.content
+                    placeholder.markdown(full_response)
 
-        if full_response.strip():
-            st.session_state.chat_history.append({"role": "assistant", "content": full_response})
+        # Simpan jawaban ke memory
+        st.session_state.chat_history.append(
+            {"role": "assistant", "content": full_response}
+        )
 
-    # ——— RESET CHAT ———
+    # =========================
+    # RESET BUTTON
+    # =========================
+
     if st.button("🔄 Reset Chat"):
         st.session_state.chat_history = [
             {
@@ -193,11 +220,10 @@ with tab2:
                 Kamu adalah Senior Software Engineer dan AI Coding Assistant.
                 Jawab profesional.
                 Jika membuat code:
-                - Berikan code lengkap (file-file terpisah bila perlu)
-                - Gunakan best practice (PEP8/ESLint/etc.)
-                - Tambahkan komentar *just-in-time* untuk penjelasan arsitektur/kritikal
-                - Utamakan keamanan (misal: input validation, XSS/SQLi prevention)
+                - Berikan code lengkap
+                - Gunakan best practice
+                - Tambahkan komentar
                 """
             }
         ]
-        st.rerun()
+        st.success("Chat berhasil direset")
